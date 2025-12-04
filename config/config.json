@@ -1,0 +1,24 @@
+{
+    "cameras": [
+        {
+            "name": "camera1",
+            "url": "rtsp://admin:Camera12@192.168.0.30/h264Preview_01_main",
+            "topic": "objectdetection/camera1",
+            "output_folder": "/home/maarten/objectdetection/camera1"
+        },
+        {
+            "name": "camera2",
+            "url": "rtsp://camera:camera2%23@192.168.0.10/h264Preview_01_main",
+            "topic": "objectdetection/camera2",
+            "output_folder": "/home/maarten/objectdetection/camera2"
+        }
+    ],
+    "model_path": "/home/maarten/objectdetection/model/best.pt",
+    "interval": 300,
+    "mqtt": {
+        "broker": "127.0.0.1",
+        "port": 1883,
+        "user": null,
+        "pass": null
+    }
+}
