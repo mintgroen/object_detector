@@ -7,7 +7,7 @@ This script uses a YOLOv8 model to perform object detection on RTSP camera strea
 -   Object detection using YOLOv8 from RTSP camera streams.
 -   Publishes detection results to an MQTT broker.
 -   Home Assistant MQTT discovery for automatic integration.
--   Creates a binary sensor for motion detection and a sensor for the number of detected objects for each camera.
+-   Creates a single sensor per camera that dynamically displays detected objects.
 -   Saves frames with detections to a specified folder.
 
 ## Setup
@@ -63,5 +63,3 @@ This script uses MQTT discovery to automatically integrate with Home Assistant. 
 -   **Sensor**: A `sensor` is created for each camera (e.g., `sensor.camera1_detections`).
     -   The state of the sensor is a comma-separated string of the names of the detected objects (e.g., "person, car").
     -   The full detection details, including confidence scores, are available as a JSON string in the sensor's attributes.
-
-The `json_attributes` of the sensors contain the full detection payload, including the list of detected objects and their confidence levels.
