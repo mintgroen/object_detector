@@ -197,14 +197,5 @@ def main():
             time.sleep(sleep_time)
 
 
-            else:
-                logging.warning(f"Skipping prediction for {camera['name']} due to camera error.")
-
-            # --- E. Sleep ---
-            # Calculate execution time to keep the 5-minute schedule accurate
-            elapsed = time.time() - start_time
-            sleep_time = max(0, INTERVAL - elapsed)
-            time.sleep(sleep_time)
-
 if __name__ == "__main__":
     main()
