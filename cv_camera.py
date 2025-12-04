@@ -28,10 +28,11 @@ MQTT_USER = config["mqtt"]["user"]
 MQTT_PASS = config["mqtt"]["pass"]
 
 # Logging Setup
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_camera_frame(rtsp_url):
     """Connects to RTSP, clears buffer, captures one frame, and disconnects."""
+    logging.debug(f"Connecting to RTSP stream: {rtsp_url}")
     cap = cv2.VideoCapture(rtsp_url)
 
     if not cap.isOpened():
@@ -56,6 +57,7 @@ def get_camera_frame(rtsp_url):
 
 def save_frame(frame, folder, camera_name):
     """Saves the frame to the specified folder."""
+    logging.debug(f"Attempting to save frame for {camera_name} in {folder}")
     if not os.path.exists(folder):
         try:
             os.makedirs(folder)
@@ -94,6 +96,7 @@ def publish_mqtt_discovery(client, cameras):
             }
         }
         client.publish(discovery_topic, json.dumps(payload), retain=True)
+        logging.debug(f"Published discovery payload for {camera_name}: {json.dumps(payload)}")
         logging.info(f"Published MQTT discovery for {camera_name} detections sensor.")
 
 
@@ -157,14 +160,20 @@ def main():
                             "confidence": round(confidence, 2)
                         })
 
+                logging.debug(f"Raw detections for {camera_name}: {detections}")
+
                 # --- D. Publish to MQTT ---
                 state_topic = f"objectdetection/{camera_name}/state"
                 attributes_topic = f"objectdetection/{camera_name}/attributes"
 
                 detected_objects_str = ", ".join(d['object'] for d in detections)
                 
+                logging.debug(f"Publishing to {state_topic}: {detected_objects_str}")
                 client.publish(state_topic, detected_objects_str)
-                client.publish(attributes_topic, json.dumps(detections))
+
+                attributes_payload = json.dumps(detections)
+                logging.debug(f"Publishing to {attributes_topic}: {attributes_payload}")
+                client.publish(attributes_topic, attributes_payload)
                 
                 logging.info(f"Published detections for {camera_name}: {detected_objects_str}")
 
