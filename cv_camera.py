@@ -1,4 +1,7 @@
 # cv_camera1.py
+import os
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+
 import cv2
 import time
 import json
@@ -6,7 +9,8 @@ import logging
 from ultralytics import YOLO
 import paho.mqtt.client as mqtt
 from datetime import datetime
-import os
+
+
 
 # --- Configuration Loading ---
 def load_config():
@@ -28,9 +32,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def get_camera_frame(rtsp_url):
     """Connects to RTSP, clears buffer, captures one frame, and disconnects."""
-    # Force TCP for stability
-    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
-
     cap = cv2.VideoCapture(rtsp_url)
 
     if not cap.isOpened():
@@ -39,7 +40,10 @@ def get_camera_frame(rtsp_url):
 
     # Read a few frames to clear buffer/auto-exposure (warmup)
     for _ in range(5):
-        cap.read()
+        ret, _ = cap.read()
+        if not ret:
+            logging.warning(f"Failed to read frame during warmup for {rtsp_url}")
+            break
 
     ret, frame = cap.read()
     cap.release() # Release immediately to save resources during sleep
@@ -125,8 +129,9 @@ def main():
     logging.info(f"Starting loop. Capturing every {INTERVAL} seconds.")
 
     while True:
+        start_time = time.time() # Start time for the whole iteration
+
         for camera in CAMERAS:
-            start_time = time.time()
             camera_name = camera["name"]
 
             # --- A. Capture ---
@@ -166,11 +171,13 @@ def main():
             else:
                 logging.warning(f"Skipping prediction for {camera_name} due to camera error.")
 
-            # --- E. Sleep ---
-            # Calculate execution time to keep the interval accurate
-            elapsed = time.time() - start_time
-            sleep_time = max(0, INTERVAL - elapsed)
-            time.sleep(sleep_time)
+        # --- E. Sleep ---
+        # Calculate execution time for all cameras
+        elapsed = time.time() - start_time
+        sleep_time = max(0, INTERVAL - elapsed)
+        
+        logging.info(f"All cameras processed. Sleeping for {sleep_time:.2f} seconds.")
+        time.sleep(sleep_time)
 
 
 if __name__ == "__main__":
