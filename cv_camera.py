@@ -96,9 +96,9 @@ def publish_mqtt_discovery(client, cameras):
         # Discovery for sensor (detection count)
         discovery_topic_sensor = f"homeassistant/sensor/object_detection/{camera_name}_count/config"
         payload_sensor = {
-            "name": f"{camera_name} Detection Count",
+            "name": f"{camera_name} Detections",
             "state_topic": topic,
-            "value_template": "{{ value_json.count }}",
+            "value_template": "{{ value_json.detections | tojson }}",
             "unique_id": f"cv_camera_{camera_name}_count",
             "json_attributes_topic": topic,
             "device": {
