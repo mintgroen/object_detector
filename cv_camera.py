@@ -68,45 +68,35 @@ def save_frame(frame, folder, camera_name):
         logging.error(f"Failed to save frame {filename}: {e}")
 
 
-def publish_mqtt_discovery(client, cameras):
-    """Publishes MQTT discovery messages for Home Assistant."""
+def publish_mqtt_discovery(client, cameras, model_names):
+    """Publishes MQTT discovery messages for Home Assistant for each object class."""
     for camera in cameras:
         camera_name = camera["name"]
-        topic = camera["topic"]
-        
-        # Discovery for binary sensor (object detection)
-        discovery_topic = f"homeassistant/binary_sensor/object_detection/{camera_name}/config"
-        payload = {
-            "name": f"{camera_name} Object Detected",
-            "state_topic": topic,
-            "value_template": "{% if value_json.count > 0 %}ON{% else %}OFF{% endif %}",
-            "device_class": "motion",
-            "unique_id": f"cv_camera_{camera_name}_motion",
-            "json_attributes_topic": topic,
-            "device": {
-                "identifiers": [f"cv_camera_{camera_name}"],
-                "name": f"Object Detection Camera - {camera_name}",
-                "model": "YOLOv8 Object Detection",
-                "manufacturer": "Custom"
-            }
-        }
-        client.publish(discovery_topic, json.dumps(payload), retain=True)
-        logging.info(f"Published MQTT discovery for {camera_name} motion sensor.")
+        for class_name in model_names:
+            safe_class_name = class_name.replace(" ", "_")
+            discovery_topic = f"homeassistant/binary_sensor/object_detection/{camera_name}_{safe_class_name}/config"
+            
+            state_topic = f"objectdetection/{camera_name}/{safe_class_name}/state"
+            attributes_topic = f"objectdetection/{camera_name}/{safe_class_name}/attributes"
 
-        # Discovery for sensor (detection count)
-        discovery_topic_sensor = f"homeassistant/sensor/object_detection/{camera_name}_count/config"
-        payload_sensor = {
-            "name": f"{camera_name} Detections",
-            "state_topic": topic,
-            "value_template": "{{ value_json.detections | tojson }}",
-            "unique_id": f"cv_camera_{camera_name}_count",
-            "json_attributes_topic": topic,
-            "device": {
-                "identifiers": [f"cv_camera_{camera_name}"],
+            payload = {
+                "name": f"{camera_name} {class_name}",
+                "state_topic": state_topic,
+                "json_attributes_topic": attributes_topic,
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "device_class": "presence",
+                "unique_id": f"cv_camera_{camera_name}_{safe_class_name}",
+                "device": {
+                    "identifiers": [f"cv_camera_{camera_name}"],
+                    "name": f"Object Detection Camera - {camera_name}",
+                    "model": "YOLOv8 Object Detection",
+                    "manufacturer": "Custom"
+                }
             }
-        }
-        client.publish(discovery_topic_sensor, json.dumps(payload_sensor), retain=True)
-        logging.info(f"Published MQTT discovery for {camera_name} detection count sensor.")
+            client.publish(discovery_topic, json.dumps(payload), retain=True)
+            logging.info(f"Published MQTT discovery for {camera_name} {class_name} sensor.")
+
 
 
 
@@ -115,6 +105,7 @@ def main():
     logging.info(f"Loading model from {MODEL_PATH}...")
     try:
         model = YOLO(MODEL_PATH)
+        class_names = model.names
     except Exception as e:
         logging.error(f"Failed to load model: {e}")
         return
@@ -130,7 +121,7 @@ def main():
         logging.info("Connected to MQTT Broker")
         
         # Publish discovery messages
-        publish_mqtt_discovery(client, CAMERAS)
+        publish_mqtt_discovery(client, CAMERAS, class_names)
 
     except Exception as e:
         logging.error(f"MQTT Connection failed: {e}")
@@ -138,10 +129,13 @@ def main():
 
     # 3. Main Loop
     logging.info(f"Starting loop. Capturing every {INTERVAL} seconds.")
+    
+    previous_detections = {camera['name']: set() for camera in CAMERAS}
 
     while True:
         for camera in CAMERAS:
             start_time = time.time()
+            camera_name = camera["name"]
 
             # --- A. Capture ---
             frame = get_camera_frame(camera["url"])
@@ -149,38 +143,59 @@ def main():
             if frame is not None:
                 # --- Save Frame ---
                 if "output_folder" in camera:
-                    save_frame(frame, camera["output_folder"], camera["name"])
+                    save_frame(frame, camera["output_folder"], camera_name)
 
                 # --- B. Predict ---
-                # 'conf=0.5' means only detect objects with >50% confidence
                 results = model.predict(frame, conf=0.5, verbose=False)
 
                 # --- C. Process Results ---
                 detections = []
-
-                # Iterate through detections in the first (and only) frame
                 for r in results:
                     for box in r.boxes:
                         cls_id = int(box.cls[0])
                         class_name = model.names[cls_id]
                         confidence = float(box.conf[0])
-
                         detections.append({
                             "object": class_name,
                             "confidence": round(confidence, 2)
                         })
 
                 # --- D. Publish to MQTT ---
-                payload = {
-                    "timestamp": datetime.now().isoformat(),
-                    "camera": camera["name"],
-                    "count": len(detections),
-                    "detections": detections
-                }
+                detected_classes = {d['object'] for d in detections}
 
-                json_payload = json.dumps(payload)
-                client.publish(camera["topic"], json_payload)
-                logging.info(f"Published to {camera['topic']}: {json_payload}")
+                # Publish ON for newly detected objects
+                for d in detections:
+                    class_name = d['object']
+                    safe_class_name = class_name.replace(" ", "_")
+                    confidence_payload = json.dumps({'confidence': d['confidence']})
+                    
+                    attributes_topic = f"objectdetection/{camera_name}/{safe_class_name}/attributes"
+                    state_topic = f"objectdetection/{camera_name}/{safe_class_name}/state"
+                    
+                    client.publish(attributes_topic, confidence_payload)
+                    client.publish(state_topic, "ON")
+                    logging.info(f"Published ON for {camera_name} - {class_name}")
+
+                # Publish OFF for objects that are no longer detected
+                disappeared_classes = previous_detections[camera_name] - detected_classes
+                for class_name in disappeared_classes:
+                    safe_class_name = class_name.replace(" ", "_")
+                    state_topic = f"objectdetection/{camera_name}/{safe_class_name}/state"
+                    client.publish(state_topic, "OFF")
+                    logging.info(f"Published OFF for {camera_name} - {class_name}")
+
+                # Update previous detections for the next iteration
+                previous_detections[camera_name] = detected_classes
+
+            else:
+                logging.warning(f"Skipping prediction for {camera_name} due to camera error.")
+
+            # --- E. Sleep ---
+            # Calculate execution time to keep the interval accurate
+            elapsed = time.time() - start_time
+            sleep_time = max(0, INTERVAL - elapsed)
+            time.sleep(sleep_time)
+
 
             else:
                 logging.warning(f"Skipping prediction for {camera['name']} due to camera error.")
