@@ -72,7 +72,7 @@ def publish_mqtt_discovery(client, cameras, model_names):
     """Publishes MQTT discovery messages for Home Assistant for each object class."""
     for camera in cameras:
         camera_name = camera["name"]
-        for class_name in model_names:
+        for class_name in model_names.values():
             safe_class_name = class_name.replace(" ", "_")
             discovery_topic = f"homeassistant/binary_sensor/object_detection/{camera_name}_{safe_class_name}/config"
             
