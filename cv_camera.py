@@ -1,7 +1,5 @@
 # cv_camera1.py
 import os
-os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
-
 import cv2
 import time
 import json
@@ -11,13 +9,13 @@ import paho.mqtt.client as mqtt
 from datetime import datetime
 
 
-
 # --- Configuration Loading ---
 def load_config():
     with open("config/config.json", "r") as f:
         return json.load(f)
 
 config = load_config()
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 CAMERAS = config["cameras"]
 MODEL_PATH = config["model_path"]
