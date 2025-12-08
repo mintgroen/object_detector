@@ -86,7 +86,8 @@ def publish_mqtt_discovery(client, cameras):
         payload = {
             "name": f"{camera_name} Detections",
             "state_topic": state_topic,
-            "json_attributes_topic": attributes_topic,
+            "value_template": "{{ value_json.detections | map(attribute='object') | join(', ') }}",
+            "json_attributes_topic": state_topic,
             "json_attributes_template": "{{ value_json | tojson }}",
             "unique_id": f"cv_camera_{camera_name}_detections",
             "device": {
@@ -165,22 +166,23 @@ def main():
 
                 # --- D. Publish to MQTT ---
                 state_topic = f"objectdetection/{camera_name}/state"
-                attributes_topic = f"objectdetection/{camera_name}/attributes"
 
                 if detections:
-                    detected_objects_str = ", ".join(f"{d['object']} ({d['confidence']})" for d in detections)
-                    attributes_payload = json.dumps(detections)
+                    payload = {
+                        "detections": detections,
+                        "count": len(detections)
+                    }
                 else:
-                    detected_objects_str = "none"
-                    attributes_payload = json.dumps([{"object": "none", "confidence": 1.0}])
+                    payload = {
+                        "detections": [{"object": "none", "confidence": 1.0}],
+                        "count": 0
+                    }
 
-                logging.debug(f"Publishing to {state_topic}: {detected_objects_str}")
-                client.publish(state_topic, detected_objects_str)
-
-                logging.debug(f"Publishing to {attributes_topic}: {attributes_payload}")
-                client.publish(attributes_topic, attributes_payload)
+                payload_str = json.dumps(payload)
+                logging.debug(f"Publishing to {state_topic}: {payload_str}")
+                client.publish(state_topic, payload_str)
                 
-                logging.info(f"Published detections for {camera_name}: {detected_objects_str}")
+                logging.info(f"Published detections for {camera_name}: {payload['detections']}")
 
             else:
                 logging.warning(f"Skipping prediction for {camera_name} due to camera error.")
