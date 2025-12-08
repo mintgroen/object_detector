@@ -58,8 +58,8 @@ python cv_camera.py
 
 ## Home Assistant Integration
 
-This script uses MQTT discovery to automatically integrate with Home Assistant. For each camera, it creates a single sensor that dynamically displays the detected objects.
+This script uses MQTT discovery to automatically integrate with Home Assistant. For each camera, it creates a single sensor.
 
 -   **Sensor**: A `sensor` is created for each camera (e.g., `sensor.camera1_detections`).
-    -   The state of the sensor is a comma-separated string of the names of the detected objects (e.g., "person, car").
-    -   The full detection details, including confidence scores, are available as a JSON string in the sensor's attributes.
+    -   The state of the sensor is a comma-separated string of the names of the detected objects (e.g., "person, car"). If no objects are detected, the state will be "none".
+    -   The sensor's attributes contain an array of the detected objects, including their confidence scores.

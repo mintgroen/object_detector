@@ -87,6 +87,7 @@ def publish_mqtt_discovery(client, cameras):
             "name": f"{camera_name} Detections",
             "state_topic": state_topic,
             "json_attributes_topic": attributes_topic,
+            "json_attributes_template": "{{ value_json | tojson }}",
             "unique_id": f"cv_camera_{camera_name}_detections",
             "device": {
                 "identifiers": [f"cv_camera_{camera_name}"],
@@ -166,12 +167,16 @@ def main():
                 state_topic = f"objectdetection/{camera_name}/state"
                 attributes_topic = f"objectdetection/{camera_name}/attributes"
 
-                detected_objects_str = ", ".join(d['object'] for d in detections)
-                
+                if detections:
+                    detected_objects_str = ", ".join(d['object'] for d in detections)
+                    attributes_payload = json.dumps(detections)
+                else:
+                    detected_objects_str = "none"
+                    attributes_payload = json.dumps([{"object": "none", "confidence": 1.0}])
+
                 logging.debug(f"Publishing to {state_topic}: {detected_objects_str}")
                 client.publish(state_topic, detected_objects_str)
 
-                attributes_payload = json.dumps(detections)
                 logging.debug(f"Publishing to {attributes_topic}: {attributes_payload}")
                 client.publish(attributes_topic, attributes_payload)
                 
