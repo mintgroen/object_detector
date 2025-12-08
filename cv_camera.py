@@ -168,7 +168,7 @@ def main():
                 attributes_topic = f"objectdetection/{camera_name}/attributes"
 
                 if detections:
-                    detected_objects_str = ", ".join(d['object'] for d in detections)
+                    detected_objects_str = ", ".join(f"{d['object']} ({d['confidence']})" for d in detections)
                     attributes_payload = json.dumps(detections)
                 else:
                     detected_objects_str = "none"
