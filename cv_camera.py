@@ -78,8 +78,8 @@ def publish_mqtt_discovery(client, cameras):
         camera_name = camera["name"]
         
         state_topic = f"objectdetection/{camera_name}/state"
-        attributes_topic = f"objectdetection/{camera_name}/attributes"
 
+        # Main sensor for all detections
         discovery_topic = f"homeassistant/sensor/object_detection/{camera_name}/config"
         payload = {
             "name": f"{camera_name} Detections",
@@ -98,6 +98,27 @@ def publish_mqtt_discovery(client, cameras):
         client.publish(discovery_topic, json.dumps(payload), retain=True)
         logging.debug(f"Published discovery payload for {camera_name}: {json.dumps(payload)}")
         logging.info(f"Published MQTT discovery for {camera_name} detections sensor.")
+
+        # Sensor for the highest confidence detection
+        processed_topic = f"objectdetection/{camera_name}/processed"
+        processed_discovery_topic = f"homeassistant/sensor/object_detection/{camera_name}_processed/config"
+        processed_payload = {
+            "name": f"{camera_name} Processed",
+            "state_topic": processed_topic,
+            "value_template": "{{ value_json.object }}",
+            "json_attributes_topic": processed_topic,
+            "json_attributes_template": "{{ value_json | tojson }}",
+            "unique_id": f"cv_camera_{camera_name}_processed",
+            "device": {
+                "identifiers": [f"cv_camera_{camera_name}"],
+                "name": f"Object Detection Camera - {camera_name}",
+                "model": "YOLOv8 Object Detection",
+                "manufacturer": "Custom"
+            }
+        }
+        client.publish(processed_discovery_topic, json.dumps(processed_payload), retain=True)
+        logging.debug(f"Published discovery payload for {camera_name} processed sensor: {json.dumps(processed_payload)}")
+        logging.info(f"Published MQTT discovery for {camera_name} processed sensor.")
 
 
 
@@ -164,23 +185,34 @@ def main():
 
                 # --- D. Publish to MQTT ---
                 state_topic = f"objectdetection/{camera_name}/state"
+                processed_topic = f"objectdetection/{camera_name}/processed"
 
                 if detections:
                     payload = {
                         "detections": detections,
                         "count": len(detections)
                     }
+                    # Find the detection with the highest confidence
+                    best_detection = max(detections, key=lambda x: x['confidence'])
+                    processed_payload = best_detection
                 else:
                     payload = {
                         "detections": [{"object": "none", "confidence": 1.0}],
                         "count": 0
                     }
+                    processed_payload = {"object": "none", "confidence": 1.0}
 
+                # Publish to main state topic
                 payload_str = json.dumps(payload)
                 logging.debug(f"Publishing to {state_topic}: {payload_str}")
                 client.publish(state_topic, payload_str)
-                
                 logging.info(f"Published detections for {camera_name}: {payload['detections']}")
+
+                # Publish to processed topic
+                processed_payload_str = json.dumps(processed_payload)
+                logging.debug(f"Publishing to {processed_topic}: {processed_payload_str}")
+                client.publish(processed_topic, processed_payload_str)
+                logging.info(f"Published processed detection for {camera_name}: {processed_payload}")
 
             else:
                 logging.warning(f"Skipping prediction for {camera_name} due to camera error.")
